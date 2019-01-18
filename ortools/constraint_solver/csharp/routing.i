@@ -75,7 +75,52 @@ class RoutingSearchParameters;
     self->AddVectorDimension(values.data(), capacity,
                              fix_start_cumul_to_zero, name);
   }
+}
 
+// Add Support for delegate TransitCallback
+// 1) Define C function pointer and add them to the wrapper.
+%{
+namespace operations_research {
+ typedef int64 (*TransitCallback)(int64, int64);
+ typedef int64 (*UnaryTransitCallback)(int64);
+}  // namespace operations_research
+%}
+
+// 2) Define Delegate in C#
+// 4) Modify RoutingModel to keep track of all delegates...
+%typemap(cscode) operations_research::RoutingModel %{
+  // Store list of delegate to avoid the GC to reclaim them.
+  private List<TransitCallback> transitCallbacks;
+  private List<UnaryTransitCallback> unaryTransitCallbacks;
+
+  // Ensure that the GC does not collect any TransitCallback set from C#
+  // as the underlying C++ class stores a shallow copy
+  private TransitCallback StoreTransitCallback(TransitCallback c) {
+    if (transitCallbacks == null) transitCallbacks = new List<TransitCallback>();
+    transitCallbacks.Add(c);
+    return c;
+  }
+  private UnaryTransitCallback StoreUnaryTransitCallback(UnaryTransitCallback c) {
+    if (unaryTransitCallbacks == null) unaryTransitCallbacks = new List<UnaryTransitCallback>();
+    unaryTransitCallbacks.Add(c);
+    return c;
+  }
+%}
+
+// 3) Link function pointer to delegate
+%define %DEFINE_CALLBACK(TYPE, CSTYPE, STORE)
+  %typemap(ctype) TYPE, TYPE& "void*"
+  %typemap(in) TYPE  %{ $1 = (TYPE)$input; %}
+  %typemap(in) TYPE& %{ $1 = (TYPE*)&$input; %}
+  %typemap(imtype, out="IntPtr") TYPE, TYPE& "CSTYPE"
+  %typemap(cstype, out="IntPtr") TYPE, TYPE& "CSTYPE"
+  %typemap(csin) TYPE, TYPE& "STORE($csinput)"
+%enddef
+%DEFINE_CALLBACK(operations_research::TransitCallback, TransitCallback, StoreTransitCallback)
+%DEFINE_CALLBACK(operations_research::UnaryTransitCallback, UnaryTransitCallback, StoreUnaryTransitCallback)
+
+// 5) Add methods to RoutingModel to support this function pointers.
+%extend operations_research::RoutingModel {
  int RegisterTransitCallback(operations_research::TransitCallback c) {
    return $self->RegisterTransitCallback([c](int64 i, int64 j) {
        return (*c)(i, j);
