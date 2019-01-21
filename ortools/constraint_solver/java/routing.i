@@ -89,6 +89,65 @@ class RoutingSearchParameters;
 %ignore operations_research::RoutingModel::MakeStateDependentTransit;
 %ignore operations_research::RoutingModel::AddDimensionDependentDimensionWithVehicleCapacity;
 
+// Bind TransitCallback to Java @FunctionalInterface
+// see: https://docs.oracle.com/javase/8/docs/api/java/util/function/BiFunction.html
+// 1) ignore current methods
+%ignore operations_research::RoutingModel::RegisterTransitCallback(operations_research::TransitCallback2);
+%rename(registerTransitCallback) operations_research::RoutingModel::RegisterTransitCallback;
+
+%ignore operations_research::RoutingModel::RegisterUnaryTransitCallback(operations_research::TransitCallback1);
+// Define C function pointer as transit callback.
+%{
+namespace operations_research {
+ typedef std::function<int64(int64, int64)> TransitCallback;
+ typedef std::function<int64(int64)> UnaryTransitCallback;
+}  // namespace operations_research
+%}
+// Add methods to RoutingModel to support this function pointers.
+%extend operations_research::RoutingModel {
+ int newRegisterTransitCallback(operations_research::TransitCallback c) {
+   return $self->RegisterTransitCallback(c);
+ }
+ //int newRegisterUnaryTransitCallback(operations_research::UnaryTransitCallback c) {
+ //  return $self->RegisterUnaryTransitCallback(c);
+ //}
+}
+// Map function pointer to Java Function<>
+%define %DEFINE_CALLBACK(TYPE, JAVATYPE, SIGN)
+  %typemap(in) TYPE %{
+    jclass object_class = jenv->GetObjectClass($input);
+    if (nullptr == object_class) return $null;
+    jmethodID method_id = jenv->GetMethodID(
+      object_class, "applyAsLong", "SIGN");
+    assert(method_id != nullptr);
+    //std::cerr << "Check call: " << jenv->CallLongMethod($input, method_id, 0, 4) << std::endl;
+    $1 = [=](long a, long b) -> long {
+      std::cerr << "Call: " << a << ", "<< b << std::endl;
+      return jenv->CallLongMethod($input, method_id, a, b);
+    };
+  %}
+  %typemap(jni) TYPE "jobject"
+  %typemap(jtype) TYPE "JAVATYPE"
+  %typemap(jstype) TYPE "JAVATYPE"
+  %typemap(javain) TYPE "$javainput"
+%enddef
+
+%DEFINE_CALLBACK(operations_research::TransitCallback, LongBinaryOperator, (JJ)J)
+//%DEFINE_CALLBACK(operations_research::UnaryTransitCallback, LongUnaryOperator, (J)J)
+
+// Add needed import to RoutingModel.java
+%typemap(javaimports) operations_research::RoutingModel %{
+import java.util.function.LongBinaryOperator;
+import java.util.function.LongUnaryOperator;
+%}
+
+// Add needed import to mainJNI.java
+%pragma(java) jniclassimports=%{
+import java.util.function.LongBinaryOperator;
+import java.util.function.LongUnaryOperator;
+%}
+
+
 // RoutingModel methods.
 %rename (activeVar) operations_research::RoutingModel::ActiveVar;
 %rename (addAllActive) operations_research::RoutingModel::AddAllActive;
@@ -179,8 +238,6 @@ class RoutingSearchParameters;
 %rename (readAssignment) operations_research::RoutingModel::ReadAssignment;
 %rename (readAssignmentFromRoutes) operations_research::RoutingModel::ReadAssignmentFromRoutes;
 %rename (registerPositiveTransitCallback) operations_research::RoutingModel::RegisterPositiveTransitCallback;
-%rename (registerTransitCallback) operations_research::RoutingModel::RegisterTransitCallback;
-%rename (registerUnaryTransitCallback) operations_research::RoutingModel::RegisterUnaryTransitCallback;
 %rename (restoreAssignment) operations_research::RoutingModel::RestoreAssignment;
 %rename (routesToAssignment) operations_research::RoutingModel::RoutesToAssignment;
 %rename (setAllowedVehiclesForIndex) operations_research::RoutingModel::SetAllowedVehiclesForIndex;

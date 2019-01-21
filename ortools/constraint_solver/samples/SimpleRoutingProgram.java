@@ -23,6 +23,7 @@ import com.google.ortools.constraintsolver.RoutingModel;
 import com.google.ortools.constraintsolver.RoutingSearchParameters;
 import com.google.ortools.constraintsolver.main;
 import java.util.logging.Logger;
+import java.util.function.LongBinaryOperator;
 // [END import]
 
 /** Minimal Routing example to showcase calling the solver.*/
@@ -53,22 +54,28 @@ public class SimpleRoutingProgram {
 
     // Create a distance callback.
     // [START distance_callback]
-    final int transitCallbackIndex = routing.registerTransitCallback(
-        (long fromIndex, long toIndex) -> {
-          // Convert from routing variable Index to user NodeIndex.
-          int fromNode = manager.indexToNode(fromIndex);
-          int toNode = manager.indexToNode(toIndex);
-          return abs(toNode - fromNode);
-        }
-    //  new LongLongToLong() {
-    //  @Override
-    //  public long run(long fromIndex, long toIndex) {
-    //    // Convert from routing variable Index to user NodeIndex.
-    //    int fromNode = manager.indexToNode(fromIndex);
-    //    int toNode = manager.indexToNode(toIndex);
-    //    return abs(toNode - fromNode);
-    //  }}
-    );
+    int transitCallbackIndex;
+    if (true) {
+      transitCallbackIndex = routing.newRegisterTransitCallback(
+          (long fromIndex, long toIndex) -> {
+            // Convert from routing variable Index to user NodeIndex.
+            int fromNode = manager.indexToNode(fromIndex);
+            int toNode = manager.indexToNode(toIndex);
+            return abs(toNode - fromNode);
+          }
+          );
+    } else {
+      transitCallbackIndex = routing.registerTransitCallback(
+          new LongLongToLong() {
+            @Override
+            public long run(long fromIndex, long toIndex) {
+              // Convert from routing variable Index to user NodeIndex.
+              int fromNode = manager.indexToNode(fromIndex);
+              int toNode = manager.indexToNode(toIndex);
+              return abs(toNode - fromNode);
+            }}
+          );
+    }
     //System.gc();
     // [END distance_callback]
 
